@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>2-Step Product Scanner</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #ffe5b4;
+        }
+        #interactive {
+            width: 640px;
+            height: 480px;
+            border: 2px solid #ddd;
+            margin: 0 auto;
+            margin-bottom: 15px;
+            background: #fff;
+            position: relative;
+            overflow: hidden;
+        }
+        #interactive video,
+        #interactive canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        /* ===== scan frame & line overlay ===== */
+        .scan-overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none; /* clicks pass through to video */
+        }
+
+        /* inner framed area (where barcode should be placed) */
+        .scan-frame {
+            position: absolute;
+            /* center and size of frame; adjust inset to change size */
+            left: 8%;
+            right: 8%;
+            top: 18%;
+            bottom: 18%;
+            border-radius: 8px;
+            box-sizing: border-box;
+            border: 2px solid rgba(255,255,255,0.06); /* faint base */
+            backdrop-filter: blur(0.6px);
+            transition: box-shadow 180ms ease, border-color 180ms ease;
+        }
+
+        /* corner accents */
+        .scan-frame .corner {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            box-sizing: border-box;
+        }
+        .scan-frame .corner:before,
+        .scan-frame .corner:after {
+            content: "";
+            position: absolute;
+            background: transparent;
+        }
+
+        .scan-frame .corner.tl {
+            left: -2px;
+            top: -2px;
+        }
+        .scan-frame .corner.tl:before {
+            left: 0;
+            top: 0;
+            width: 18px;
+            height: 4px;
+            background: transparent;
+            box-shadow: 0 0 0 0 rgba(0,0,0,0);
+            border-top: 4px solid #00e6a8;
+        }
+        .scan-frame .corner.tl:after  {
+            left: 0;
+            top: 0;
+            width: 4px;
+            height: 18px;
+            background: transparent;
+            border-left: 4px solid #00e6a8;
+        }
+
+        .scan-frame .corner.tr {
+            right: -2px;
+            top: -2px;
+            transform: rotate(90deg);
+        }
+        .scan-frame .corner.bl {
+            left: -2px;
+            bottom: -2px;
+            transform: rotate(-90deg);
+        }
+        .scan-frame .corner.br {
+            right: -2px;
+            bottom: -2px;
+            transform: rotate(180deg);
+        }
+
+        /* scan line */
+        .scan-line {
+            position: absolute;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            top: 0;
+            transform: translateY(-100%);
+            background: linear-gradient(90deg, transparent, rgba(0,230,168,0.95), transparent);
+            filter: drop-shadow(0 0 6px rgba(0,230,168,0.6));
+            animation: scan-move 2s linear infinite;
+            animation-play-state: paused; /* start paused; enable when scanning */
+        }
+
+        @keyframes scan-move {
+            0%   { transform: translateY(-100%); }
+            50%  { transform: translateY(100%); }
+            100% { transform: translateY(-100%); }
+        }
+
+        /* when scanning: play animation and slightly highlight frame */
+        #interactive.scanning .scan-line {
+            animation-play-state: running;
+        }
+        #interactive.scanning .scan-frame {
+            border-color: rgba(0,230,168,0.12);
+            box-shadow: 0 0 22px rgba(0,230,168,0.06) inset;
+        }
+
+        /* flash effect on detection */
+        .scan-frame.flash {
+            border-color: rgba(0,230,168,0.9) !important;
+            box-shadow: 0 0 36px rgba(0,230,168,0.35), 0 0 6px rgba(0,230,168,0.45) inset;
+            transition: box-shadow 180ms ease, border-color 180ms ease;
+        }
+
+        /* small caption near top of frame */
+        .frame-caption {
+            position: absolute;
+            top: -30px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-weight: 600;
+            color: #ffffff;
+            opacity: 0.95;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+            pointer-events: none;
+            font-size: 14px;
+        }
+
+        /* table alignment */
+        #product-table th, #product-table td {
+            text-align: center;
+        }
+
+        /* responsive */
+        @media (max-width: 700px) {
+            #interactive { width: 100%; height: 360px; }
+            #message { width: calc(100% - 32px); }
+        }
+    </style>
+</head>
+<body class="d-flex flex-column align-items-center py-4">
+
+    <h2 class="mb-4 text-center">📷 2-Step Product Scanner</h2>
+
+    <div id="interactive"></div>
+        <!-- overlay with frame and scan-line -->
+        <div class="scan-overlay" aria-hidden="true">
+            <div class="scan-frame" id="scanFrame">
+                <div class="frame-caption" id="frameCaption">Align product FRONT inside the frame</div>
+                <div class="corner tl"></div>
+                <div class="corner tr"></div>
+                <div class="corner bl"></div>
+                <div class="corner br"></div>
+                <div class="scan-line" id="scanLine"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <button id="startBtn" class="btn btn-success">Start Scanner</button>
+        <button id="stopBtn" class="btn btn-danger">Stop Scanner</button>
+    </div>
+
+    <div id="message" class="alert alert-info text-center" style="display:none; width: 640px;"></div>
+
+    <div class="mt-4 text-center">
+        <button onclick="exportProductsToCSV()"
+                class="p-2 bg-blue-500 text-black rounded">
+            ⬇ Download Products (CSV)
+        </button>
+    </div>
+
+    <table id="product-table" class="table table-bordered mt-4 text-center" style="width: 80%; max-width: 900px;">
+        <thead>
+            <tr>
+                <th>Barcode</th>
+                <th>Name</th>
+                <th>Price</th>
+                <th>Unit</th>
+                <th>Stock</th>
+                <th>Category</th>
+            </tr>
+        </thead>
+        <tbody id="productsTableBody"></tbody>
+    </table>
+
+    <script>
+        let scanning = false;
+        let step = 1; // Track scanning step
+        let tempFrontScan = null; // Store front scan result
+        let tempBarcode = null;   // Store barcode scan result
+        let lastCode = null;
+        let lastTime = 0;
+
+        const messageEl = document.getElementById("message");
+        const tableBody = document.getElementById("productsTableBody");
+        const interactiveEl = document.getElementById("interactive");
+        const scanFrameEl = document.getElementById("scanFrame");
+        const frameCaptionEl = document.getElementById("frameCaption");
+
+        function showMessage(msg, type="info") {
+            messageEl.textContent = msg;
+            messageEl.className = "alert alert-" + type;
+            messageEl.style.display = "block";
+        }
+
+        function addProductRow(frontScan, product, barcode) {
+            const row = document.createElement("tr");
+            row.innerHTML = `
+                <td>${barcode}</td>
+                <td>${product.name}</td>
+                <td>${product.price}</td>
+                <td>${product.unit}</td>
+                <td>${product.stock}</td>
+                <td>${product.category}</td>
+            `;
+            tableBody.appendChild(row);
+        }
+
+        // Fake product DB
+        const productsDB = {
+            // =============================
+            // Snacks - Cupp Keyk Variants
+            // =============================
+            "4800135729714": { name: "Cupp Keyk Chocolate", price: "12", unit: "piece", stock: "60", category: "Snacks" },
+            "4800135729721": { name: "Cupp Keyk Ube", price: "12", unit: "piece", stock: "55", category: "Snacks" },
+            "4800092550058": { name: "Cupp Keyk Choco Mocha (Piece Jar)", price: "12", unit: "piece", stock: "60", category: "Snacks" },
+            "4800092550072": { name: "Cupp Keyk Choco Mocha (Box)", price: "120", unit: "box", stock: "25", category: "Snacks" },
+            "4800092550034": { name: "Cupp Keyk Coco Ube (Piece Jar)", price: "12", unit: "piece", stock: "55", category: "Snacks" },
+            "4800092550065": { name: "Cupp Keyk Coco Ube (Box)", price: "120", unit: "box", stock: "20", category: "Snacks" },
+            "14800092551250": { name: "Cupp Keyk Choco Topps (10x10)", price: "120", unit: "box", stock: "20", category: "Snacks" },
+            "4800092551031": { name: "Cupp Keyk Cheezy Cheese 5’s", price: "25", unit: "pack", stock: "50", category: "Snacks" },
+            "4800092551017": { name: "Cupp Keyk Coco Ube 5’s", price: "25", unit: "pack", stock: "50", category: "Snacks" },
+            "4800092551000": { name: "Cupp Keyk Nutty Choco 5’s", price: "25", unit: "pack", stock: "50", category: "Snacks" },
+            "4800092551093": { name: "Cupp Keyk Queso Real 5’s", price: "25", unit: "pack", stock: "50", category: "Snacks" },
+            "2070015812200": { name: "Cupp Keyk Choco Mocha 5’s", price: "25", unit: "pack", stock: "50", category: "Snacks" },
+            "9050257102201": { name: "Cupp Keyk Choco Mocha 5’s", price: "25", unit: "pack", stock: "50", category: "Snacks" },
+            "4210992150058": { name: "Cupp Keyk Choco Mocha 5’s", price: "25", unit: "pack", stock: "50", category: "Snacks" },
+            "0889021550158": { name: "Cupp Keyk Choco Mocha 5’s", price: "25", unit: "pack", stock: "50", category: "Snacks" },
+            "7200282510058": { name: "Cupp Keyk Choco Mocha 5’s", price: "25", unit: "pack", stock: "50", category: "Snacks" },
+            "6950015292201": { name: "Cupp Keyk Choco Mocha 5’s", price: "25", unit: "pack", stock: "50", category: "Snacks" },
+
+            // =============================
+            // Snacks - Chips & Others
+            // =============================
+            "4800110200139": { name: "Piattos Cheese", price: "20", unit: "pack", stock: "45", category: "Snacks" },
+            "4800016644504": { name: "Piattos Cheese 85 g", price: "20", unit: "pack", stock: "45", category: "Snacks" },
+            "4809876543210": { name: "Piattos Sour Cream", price: "15", unit: "pack", stock: "140", category: "Snacks" },
+            "4800098765432": { name: "Jack 'n Jill Patata Potato Snack", price: "10", unit: "pack", stock: "120", category: "Snacks" },
+            "4801123456789": { name: "Clover Chips BBQ", price: "12", unit: "pack", stock: "130", category: "Snacks" },
+            "4801123456796": { name: "Clover Chips Cheese", price: "12", unit: "pack", stock: "125", category: "Snacks" },
+            "4800016652035": { name: "Mr. Chips (Jack ’n Jill)", price: "25", unit: "pack", stock: "50", category: "Snacks" },
+
+            // =============================
+            // Beverages
+            // =============================
+            "4801122800589": { name: "Pepsi 330 mL", price: "24", unit: "bottle", stock: "40", category: "Beverages" },
+            "4803925033124": { name: "7-Up can 330 mL", price: "22", unit: "can", stock: "50", category: "Beverages" },
+
+            // =============================
+            // Canned Goods - 555
+            // =============================
+            "748485801919": { name: "555 Carne Norte 260g", price: "44", unit: "can", stock: "30", category: "Canned Goods" },
+            "748485801162": { name: "555 Carne Norte 175g", price: "31", unit: "can", stock: "40", category: "Canned Goods" },
+            "748485800264": { name: "555 Carne Norte 150g", price: "28", unit: "can", stock: "45", category: "Canned Goods" },
+            "748485201061": { name: "555 Fried Sardines Bistek 155g", price: "27", unit: "can", stock: "35", category: "Canned Goods" },
+            "748485200989": { name: "555 Fried Sardines Escabeche 155g", price: "27", unit: "can", stock: "35", category: "Canned Goods" },
+            "748485200668": { name: "555 Fried Sardines Hot & Spicy 155 g", price: "27", unit: "can", stock: "40", category: "Canned Goods" },
+            "748485200064": { name: "555 Sardines Green 425g", price: "42", unit: "can", stock: "20", category: "Canned Goods" },
+            "748485200071": { name: "555 Sardines Red 425g", price: "42", unit: "can", stock: "20", category: "Canned Goods" },
+            "748485200019": { name: "555 Sardines 150 g", price: "27", unit: "can", stock: "40", category: "Canned Goods" },
+            "748485200040": { name: "555 Spanish 155g", price: "27", unit: "can", stock: "35", category: "Canned Goods" },
+            "748485700021": { name: "555 Tuna Afritada 155g", price: "26", unit: "can", stock: "30", category: "Canned Goods" },
+            "748485700090": { name: "555 Tuna Bicol Express 155g", price: "26", unit: "can", stock: "30", category: "Canned Goods" },
+            "748485700038": { name: "555 Tuna Caldereta 155g", price: "26", unit: "can", stock: "30", category: "Canned Goods" },
+            "748485700083": { name: "555 Tuna FnO 155g", price: "26", unit: "can", stock: "30", category: "Canned Goods" },
+            "748485701059": { name: "555 Jr. Tuna Adobo 130g", price: "22", unit: "can", stock: "50", category: "Canned Goods" },
+            "748485701042": { name: "555 Jr. Tuna FnO 130g", price: "22", unit: "can", stock: "50", category: "Canned Goods" },
+
+            // =============================
+            // Instant Noodles - Lucky Me & Nissin
+            // =============================
+            "4807770270017": { name: "Lucky Me Beef Noodles 55 g", price: "15", unit: "pack", stock: "60", category: "Instant Noodles" },
+            "14807770273688": { name: "Lucky Me Pancit Canton (Assorted) 60 g", price: "15", unit: "pack", stock: "50", category: "Instant Noodles" },
+            "14807770272094": { name: "Lucky Me Spicy Hot Beef Noodles 50 g", price: "15", unit: "pack", stock: "45", category: "Instant Noodles" },
+            "4800110026497": { name: "Homi Beef/Chicken Noodles", price: "20", unit: "pack", stock: "40", category: "Instant Noodles" },
+            "4800016550019": { name: "Nissin Cup Noodles Chicken", price: "20", unit: "cup", stock: "100", category: "Instant Noodles" },
+            "4800016550026": { name: "Nissin Cup Noodles Beef", price: "20", unit: "cup", stock: "90", category: "Instant Noodles" },
+            "4800016550033": { name: "Nissin Cup Noodles Seafood", price: "22", unit: "cup", stock: "85", category: "Instant Noodles" },
+            "4800016551598": { name: "Nissin Ramen Seafood 56 g", price: "18", unit: "pack", stock: "30", category: "Instant Noodles" },
+            "4800016560910": { name: "Nissin Ramen Spicy Seafood 59 g", price: "18", unit: "pack", stock: "30", category: "Instant Noodles" },
+            "0089686171686": { name: "Indomie Mi Goreng (12-pack cups)", price: "N/A", unit: "pack", stock: "N/A", category: "Instant Noodles" },
+            "0089686140057": { name: "Indomie Mi Goreng Chicken (Pack of 30)", price: "N/A", unit: "pack", stock: "N/A", category: "Instant Noodles" },
+            "0076186000516": { name: "Sapporo Ichiban Original Ramen (17.5 oz)", price: "N/A", unit: "pack", stock: "N/A", category: "Instant Noodles" },
+
+            // =============================
+            // Biscuits
+            // =============================
+            "4800361412345": { name: "Presto Peanut Butter Sandwich", price: "8", unit: "pack", stock: "200", category: "Biscuits" },
+            "4807771234567": { name: "Bingo Chocolate Sandwich", price: "7", unit: "pack", stock: "180", category: "Biscuits" },
+            "4801234009876": { name: "Oreo Vanilla", price: "12", unit: "pack", stock: "150", category: "Biscuits" },
+            "4801234009883": { name: "Oreo Chocolate Creme", price: "12", unit: "pack", stock: "140", category: "Biscuits" },
+
+            // =============================
+            // Coffee
+            // =============================
+            "4806501234561": { name: "Nescafé Original 3-in-1", price: "7", unit: "sachet", stock: "300", category: "Coffee" },
+            "4806501234562": { name: "Nescafé Creamy White", price: "8", unit: "sachet", stock: "280", category: "Coffee" },
+            "4806501234563": { name: "Nescafé Brown", price: "8", unit: "sachet", stock: "260", category: "Coffee" },
+            "4806501234564": { name: "Nescafé Classic Jar 100 g", price: "120", unit: "jar", stock: "60", category: "Coffee" },
+
+            // =============================
+            // Great Taste White (same name, different flavors/sizes)
+            // =============================
+            "4800017001001": { name: "Great Taste White", variant: "Original", price: "8", unit: "sachet (27g)", stock: "300", category: "Coffee" },
+            "4800017001002": { name: "Great Taste White", variant: "Caramel",  price: "8", unit: "sachet (27g)", stock: "260", category: "Coffee" },
+            "4800017001003": { name: "Great Taste White", variant: "Hazelnut", price: "8", unit: "sachet (27g)", stock: "240", category: "Coffee" },
+            "4800017001010": { name: "Great Taste White", variant: "Original", price: "95", unit: "bag (10×27g)", stock: "90", category: "Coffee" },
+
+            // =============================
+            // San Mig Coffee 3-in-1
+            // =============================
+            "4800026002001": { name: "San Mig Coffee 3-in-1", variant: "Original",   price: "8",  unit: "sachet (20g)",  stock: "320", category: "Coffee" },
+            "4800026002002": { name: "San Mig Coffee 3-in-1", variant: "Strong",     price: "8",  unit: "sachet (20g)",  stock: "300", category: "Coffee" },
+            "4800026002003": { name: "San Mig Coffee 3-in-1", variant: "Sugar-Free", price: "9",  unit: "sachet (20g)",  stock: "180", category: "Coffee" },
+            "4800026002010": { name: "San Mig Coffee 3-in-1", variant: "Original",   price: "90", unit: "bag (12×20g)", stock: "85",  category: "Coffee" },
+
+            // =============================
+            // ===== Dairy / Milk =====
+            // =============================
+            "4800037003001": { name: "Birch Tree Fortified Milk", variant: "Plain", price: "92",  unit: "pouch (300g)", stock: "70",  category: "Dairy" },
+            "4800037003002": { name: "Birch Tree Fortified Milk", variant: "Plain", price: "205", unit: "pouch (700g)", stock: "40",  category: "Dairy" },
+            "4800037003010": { name: "Fresh Milk",                variant: "Whole", price: "95",  unit: "bottle (1L)",  stock: "50",  category: "Dairy" },
+
+            // =============================
+            // ===== Biscuits: Rebisco Choco, Tiger, Nissin Wafers, Richoco =====
+            // =============================
+            // Rebisco Choco (same name, flavored variants)
+            "4800048004001": { name: "Rebisco Choco Sandwich", variant: "Chocolate",       price: "9",  unit: "pack (30g)", stock: "200", category: "Biscuits" },
+            "4800048004002": { name: "Rebisco Choco Sandwich", variant: "Dark Chocolate",  price: "9",  unit: "pack (30g)", stock: "180", category: "Biscuits" },
+            "4800048004003": { name: "Rebisco Choco Sandwich", variant: "Cookies & Cream", price: "9",  unit: "pack (30g)", stock: "170", category: "Biscuits" },
+
+            // Tiger Biscuits
+            "4800059005001": { name: "Tiger Biscuit", variant: "Chocolate", price: "8", unit: "pack (30g)", stock: "220", category: "Biscuits" },
+            "4800059005002": { name: "Tiger Biscuit", variant: "Vanilla",   price: "8", unit: "pack (30g)", stock: "210", category: "Biscuits" },
+
+            // Nissin Wafers
+            "4800016607001": { name: "Nissin Wafer", variant: "Chocolate", price: "8",  unit: "pack (25g)", stock: "240", category: "Biscuits" },
+            "4800016607002": { name: "Nissin Wafer", variant: "Strawberry", price: "8",  unit: "pack (25g)", stock: "230", category: "Biscuits" },
+            "4800016607003": { name: "Nissin Wafer", variant: "Vanilla",    price: "8",  unit: "pack (25g)", stock: "230", category: "Biscuits" },
+            
+            // =============================
+            // Richoco (Chocolate & Cheese)
+            // =============================
+            "8993175530011": { name: "Richoco Wafer Rolls", variant: "Chocolate", price: "12", unit: "cup (40g)", stock: "150", category: "Biscuits" },
+            "8993175530028": { name: "Richoco Wafer Rolls", variant: "Cheese",    price: "12", unit: "cup (40g)", stock: "150", category: "Biscuits" },
+
+            // =============================
+            // ===== Chocolates: Toblerone =====
+            // =============================
+            "7614500011001": { name: "Toblerone", variant: "Milk Chocolate", price: "65",  unit: "bar (50g)",  stock: "90", category: "Chocolates" },
+            "7614500011002": { name: "Toblerone", variant: "Dark Chocolate", price: "70",  unit: "bar (50g)",  stock: "80", category: "Chocolates" },
+            "7614500011003": { name: "Toblerone", variant: "White Chocolate",price: "70",  unit: "bar (50g)",  stock: "80", category: "Chocolates" },
+            "7614500011101": { name: "Toblerone", variant: "Milk Chocolate", price: "120", unit: "bar (100g)", stock: "60", category: "Chocolates" },
+
+            // =============================
+            // ===== Spreads: Cheez Whiz, Lady's Choice =====
+            // =============================
+            // Cheez Whiz sizes
+            "4800066006001": { name: "Cheez Whiz", variant: "Original", price: "25",  unit: "sachet (62g)", stock: "140", category: "Spreads" },
+            "4800066006002": { name: "Cheez Whiz", variant: "Original", price: "115", unit: "jar (220g)",  stock: "80",  category: "Spreads" },
+            "4800066006003": { name: "Cheez Whiz", variant: "Original", price: "195", unit: "jar (440g)",  stock: "50",  category: "Spreads" },
+
+            // =============================
+            // Lady's Choice (sizes + flavors)
+            // =============================
+            "4800077007001": { name: "Lady's Choice Real Mayonnaise", variant: "Original",       price: "85",  unit: "jar (220ml)", stock: "90", category: "Condiments" },
+            "4800077007002": { name: "Lady's Choice Real Mayonnaise", variant: "Original",       price: "145", unit: "jar (470ml)", stock: "70", category: "Condiments" },
+            "4800077007011": { name: "Lady's Choice Sandwich Spread", variant: "Classic Sweet",  price: "82",  unit: "jar (220ml)", stock: "85", category: "Condiments" },
+            "4800077007012": { name: "Lady's Choice Sandwich Spread", variant: "Classic Sweet",  price: "140", unit: "jar (470ml)", stock: "65", category: "Condiments" },
+            "4800077007021": { name: "Lady's Choice Mayonnaise",      variant: "Garlic",         price: "92",  unit: "jar (220ml)", stock: "60", category: "Condiments" },
+
+            // =============================
+            // ===== Snacks: Choco Mucho (different shapes) =====
+            // =============================
+            "4800088008001": { name: "Choco Mucho", variant: "Bar",        price: "15", unit: "bar (32g)",         stock: "200", category: "Snacks" },
+            "4800088008002": { name: "Choco Mucho", variant: "Minis",      price: "60", unit: "pouch (10 minis)",  stock: "120", category: "Snacks" },
+            "4800088008003": { name: "Choco Mucho", variant: "Cookies",    price: "18", unit: "pack (30g)",        stock: "140", category: "Snacks" },
+            "4800088008004": { name: "Choco Mucho", variant: "Bites",      price: "45", unit: "pouch (60g)",       stock: "130", category: "Snacks" },
+
+            // =============================
+            // ===== Water (different brands/sizes) =====
+            // =============================
+            "4800099009001": { name: "Bottled Water", variant: "Wilkins",        price: "15", unit: "bottle (350ml)", stock: "200", category: "Beverages" },
+            "4800099009002": { name: "Bottled Water", variant: "Wilkins",        price: "20", unit: "bottle (500ml)", stock: "180", category: "Beverages" },
+            "4800099009011": { name: "Bottled Water", variant: "Nature Spring",  price: "12", unit: "bottle (350ml)", stock: "220", category: "Beverages" },
+            "4800099009012": { name: "Bottled Water", variant: "Nature Spring",  price: "18", unit: "bottle (500ml)", stock: "210", category: "Beverages" },
+            "4800099009021": { name: "Bottled Water", variant: "Absolute",       price: "18", unit: "bottle (500ml)", stock: "190", category: "Beverages" },
+            "4800099009031": { name: "Bottled Water", variant: "Summit",         price: "18", unit: "bottle (500ml)", stock: "195", category: "Beverages" },
+
+            // =============================
+            // Essentials & Condiments
+            // =============================
+            "4809123456781": { name: "White Sugar 1 kg", price: "55", unit: "kg", stock: "80", category: "Essentials" },
+            "4809123456782": { name: "Golden Fiesta Cooking Oil 1L", price: "120", unit: "bottle", stock: "70", category: "Essentials" },
+            "4809123456783": { name: "Minola Cooking Oil 1L", price: "115", unit: "bottle", stock: "65", category: "Essentials" },
+            "4809123456784": { name: "Datu Puti Vinegar 1L", price: "40", unit: "bottle", stock: "100", category: "Condiments" },
+            "4809123456785": { name: "Datu Puti Soy Sauce 1L", price: "42", unit: "bottle", stock: "95", category: "Condiments" },
+            "4809123456786": { name: "UFC Banana Ketchup 320g", price: "30", unit: "bottle", stock: "110", category: "Condiments" },
+            "4809123456787": { name: "Del Monte Tomato Ketchup 320g", price: "32", unit: "bottle", stock: "105", category: "Condiments" },
+
+            // =============================
+            // Ligo Sardines & Century Tuna
+            // =============================
+            "4800011001011": { name: "Ligo Sardines", variant: "Green in Tomato Sauce 155g", price: "25", unit: "can", stock: "80", category: "Canned Goods" },
+            "4800011001012": { name: "Ligo Sardines", variant: "Red with Chili 155g", price: "26", unit: "can", stock: "70", category: "Canned Goods" },
+
+            "4800022002011": { name: "Mega Sardines", variant: "Tomato Sauce 155g", price: "28", unit: "can", stock: "90", category: "Canned Goods" },
+            "4800022002012": { name: "Mega Sardines", variant: "Hot & Spicy 155g", price: "29", unit: "can", stock: "75", category: "Canned Goods" },
+            "4800022002023": { name: "Mega Sardines", variant: "Tomato Sauce 425g", price: "55", unit: "can", stock: "50", category: "Canned Goods" },
+
+            "4800033003011": { name: "Century Tuna", variant: "Flakes in Oil 155g", price: "35", unit: "can", stock: "120", category: "Canned Goods" },
+            "4800033003012": { name: "Century Tuna", variant: "Hot & Spicy 155g", price: "36", unit: "can", stock: "110", category: "Canned Goods" },
+            "4800033003013": { name: "Century Tuna", variant: "Chili Corned Tuna 155g", price: "37", unit: "can", stock: "100", category: "Canned Goods" }
+        };
+
+
+
+        // ✅ Add the export function here
+        function exportProductsToCSV() {
+            let csvContent = "barcode,name,price,unit,stock,category\n";
+
+            for (let barcode in productsDB) {
+                const p = productsDB[barcode];
+                csvContent += `"${barcode}","${p.name}","${p.price}","${p.unit}","${p.stock}","${p.category}"\n`;
+            }
+
+            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", "products.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function verifyAndAdd() {
+            if (tempFrontScan && tempBarcode) {
+                let product = productsDB[tempBarcode] || { name: "Unknown", price: "0", unit: "N/A", stock: "0", category: "Uncategorized" };
+                addProductRow(tempFrontScan, product, tempBarcode);
+                showMessage("✅ Product added to table", "success");
+
+                // Reset for next scan
+                tempFrontScan = null;
+                tempBarcode = null;
+                step = 1;
+                frameCaptionEl.textContent = "Step 1: Scan product FRONT";
+            }
+        }
+
+        function flashFrame() {
+            scanFrameEl.classList.add("flash");
+            setTimeout(() => scanFrameEl.classList.remove("flash"), 360);
+        }
+
+        document.getElementById("startBtn").addEventListener("click", () => {
+            if (scanning) return;
+            scanning = true;
+
+            Quagga.init({
+                inputStream: {
+                    name: "Live",
+                    type: "LiveStream",
+                    target: document.querySelector('#interactive'),
+                    constraints: {
+                        width: 640,
+                        height: 480,
+                        facingMode: "environment"
+                    }
+                },
+                decoder: {
+                    readers: ["ean_reader"]
+                },
+                locate: true
+            }, function(err) {
+                if (err) {
+                    console.error("Quagga init error:", err);
+                    showMessage("Camera init failed: " + (err.message || err), "danger");
+                    scanning = false;
+                    return;
+                }
+                Quagga.start();
+                interactiveEl.classList.add("scanning");
+                showMessage("Scanner started... Step 1: Scan product FRONT", "primary");
+                frameCaptionEl.textContent = "Step 1: Scan product FRONT";
+            });
+        });
+
+            Quagga.onDetected(result => {
+                if (result && result.codeResult && result.codeResult.code) {
+                    let code = result.codeResult.code;
+
+                    // Only accept if same code repeats
+                    if (lastCode === code && (Date.now() - lastTime) < 1500) {
+                        // brief feedback flash
+                        flashFrame();
+
+                        if (step === 1) {
+                            tempFrontScan = "Front-" + code;
+                            step = 2;
+                            showMessage("✅ Front scan done. Step 2: Scan BARCODE", "info");
+                            frameCaptionEl.textContent = "Step 2: Scan product BARCODE";
+                            return;
+                        } else if (step === 2) {
+                            if (/^\d{12,13}$/.test(code)) {
+                                tempBarcode = code;
+                                showMessage("✅ Barcode scanned: " + code, "success");
+                                frameCaptionEl.textContent = "Detected — adding product...";
+
+                                verifyAndAdd();
+                                Quagga.stop();
+                                scanning = false;
+                                showMessage("Scanner stopped after adding product.", "secondary");
+                            } else {
+                                showMessage("Scanned code is not a valid 12/13-digit barcode. Try again.", "warning");
+                            }
+                        }
+                    }
+
+                    // update last scan
+                    lastCode = code;
+                    lastTime = Date.now();
+                }
+            });
+
+        document.getElementById("stopBtn").addEventListener("click", () => {
+            if (scanning) {
+                Quagga.stop();
+                scanning = false;
+                step = 1;
+                tempFrontScan = null;
+                tempBarcode = null;
+                interactiveEl.classList.remove("scanning");
+                frameCaptionEl.textContent = "Scanner stopped";
+                showMessage("Scanner stopped manually", "warning");
+            }
+        });
+    </script>
+</body>
+</html>

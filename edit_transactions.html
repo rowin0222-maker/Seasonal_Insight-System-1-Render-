@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+<title>Edit Transaction</title>
+<style>
+    body {
+        margin: 0;
+        padding: 0;
+        font-family: 'Segoe UI', sans-serif;
+        min-height: 100vh;
+        background: linear-gradient(to right, #f5e7d0, #f1caa8, #e6a57e);
+        background-size: 400% 400%;
+        animation: gradientShift 20s ease infinite;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    @keyframes gradientShift {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+
+    .edit-form-container {
+        background-color: rgba(255, 255, 255, 0.95);
+        padding: 40px 30px;
+        border-radius: 16px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+        width: 90%;
+        max-width: 500px;
+    }
+
+    h2 {
+        text-align: center;
+        margin-bottom: 25px;
+        color: #444;
+    }
+
+    label {
+        display: block;
+        margin-bottom: 6px;
+        color: #555;
+        font-weight: bold;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    input[type="date"] {
+        width: 100%;
+        padding: 10px 12px;
+        margin-bottom: 20px;
+        border: 1px solid #ccc;
+        border-radius: 10px;
+        font-size: 16px;
+    }
+
+    button {
+        width: 100%
+        padding: 12px;
+        background-color: #d98258;
+        border: none;
+        border-radius: 10px;
+        color: white;
+        font-size: 16px;
+        cursor: pointer;
+        transition: background 0.3s;
+    }
+
+    button:hover {
+        background-color: #c46b41;
+    }
+</style>
+</head>
+<body>
+    <div class="edit-form-container">
+        <h2>Edit Transaction</h2>
+
+        {% include "messages.html" %}
+        
+        <form method="POST" action="{{ url_for('main.edit_transactions', id=transaction.id) }}">
+            <label for="transaction_id">Transaction ID</label>
+            <input type="text" name="transaction_id" value="{{ transaction.transaction_id }}">
+
+            <label>Product</label>
+            <input type="text" name="product_name" value="{{ product_name }}" required>
+
+            <label>Quantity</label>
+            <input type="number" name="quantity" value="{{ transaction.quantity }}" required>
+
+            <label>Season</label>
+            <input type="text" name="season" value="{{ transaction.season }}" required>
+
+            <label>Date and Time</label>
+            <input type="datetime-local" id="date" name="date" class="form-control" required
+                    value="{{ transaction.date.strftime('%Y-%m%dT%H:%M') }}">
+
+            <button type="submit">Update Transaction</button>
+        </form>
+    </div>
+</body>
+</html>

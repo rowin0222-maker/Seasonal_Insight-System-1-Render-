@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Sign Up</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+        <style>
+            body {
+                background-color: #ffe5b4;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            }
+
+            .signup-box {
+                background: rgba(255, 255, 255, 0.95);
+                padding: 2rem;
+                border-radius: 15px;
+                box-shadow: 0 0 15px rgba(0,0,0,0.2);
+                width: 100%;
+                max-width: 500px;
+            }
+
+            .signup-box h2 {
+                text-align: center;
+                margin-bottom: 1.5rem;
+                color: #333;
+            }
+
+            .form-label {
+                font-weight: bold;
+            }
+            .signup-container {
+                background: rgba(0,0,0, 0.5);
+                padding: 2rem;
+                border-radius: 15px;
+                box-shadow: 0 0 10px #000;
+                width: 100%;
+                max-width: 500px;
+            }
+            label {
+                font-weight: bold;
+            }
+
+            .box {
+                margin: 100px auto;
+                max-width: 400px;
+                padding: 30px;
+                background: rgba(255,255,255,0.95);
+                border-radius: 10px;
+            }
+
+            .fade-out {
+                animation: fadeOut 0.5s forwards;
+            }
+
+            @keyframes fadeOut {
+                from { opacity: 1; }
+                to { opacity: 0; transform: translateY(-20px); }
+            }
+
+            .fadein {
+                animation: fadeInSlide 0.6s ease-out;
+            }
+
+            @keyframes fadeInSlide {
+                from { opacity: 0; transform: translateY(20px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+
+            .transition-link {
+                display: inline-block;
+                padding: 10px 20px;
+                border: 2px solid #ff6b6b;
+                background-color: #ff6b6b;
+                color: white;
+                text-align: center;
+                text-decoration: none;
+                border-radius: 8px;
+                font-weight: 600;
+                transition: background-color 0.3s, transform 0.2s;
+            }
+
+            .transition-link:hover {
+                background-color: #e55039;
+                transform: translateY(-2px);
+                text-decoration: none;
+                color: white;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container d-flex justify-content-center align-items-center min-vh-100">
+            <div class="card p-4" style="width: 100%; max-width: 500px; background-color: #fff;">
+            <h2 class="text-center mb-3">Sign Up</h2>
+
+            {% include "messages.html" %}
+
+            <form method="POST">
+                <div class="mb-3">
+                    <label>Username</label>
+                    <input name="username" class="form-control" required autocomplete="username">
+                </div>
+                <div class="mb-3 position-relative">
+                    <label>Password</label>
+                    <input type="password" name="password" id="signup-password" class="form-control" required autocomplete="new-password">
+                    <span class="toggle-password" onclick="togglePassword('signup-password', this)" style="position: absolute; top: 38px; right: 15px; cursor: pointer;">
+                        <i class="fas fa-eye"></i>
+                    </span>
+                </div>
+                <div class="mb-3 position-relative">
+                    <label for="confirm_password" class="form-label">Confirm Password</label>
+                    <input type="password" name="confirm_password" id="confirm-password" class="form-control" required autocomplete="new-password">
+                    <span class="toggle-password" onclick="togglePassword('confirm-password', this)" style="position: absolute; top: 38px; right: 15px; cursor: pointer;">
+                        <i class="fas fa-eye"></i>
+                    </span>
+                </div>
+                <div class="mb-3">
+                    <label for="email" class="form-label">Email Address:</label>
+                    <input type="email" name="email" id="email" class="form-control" required autocomplete="email">
+                </div>
+                <div class="mb-3">
+                    <label for="contact" class="form-label">Contact Number:</label>
+                    <input type="tel" name="contact" id="contact" class="form-control" required pattern="[0-9]{10,11}" placeholder="e.g 09123456789" autocomplete="tel">
+                </div>
+
+                <div class="mb-3">
+                    <label for="dob" class="form-label">Date of Birth:</label>
+                    <input type="date" name="dob" id="dob" class="form-control" required>
+                </div>
+
+                <button class="btn btn-success w-100">Sign Up</button>
+                <p class="text-center mb-3">Already have an account? 
+                <a href="{{ url_for('main.login') }}" class="transition-link">Log In</a>
+                </p>
+            </form>
+
+
+        <div class="text-center mt-3 mb-2">
+            <hr>
+            <span style="position: relative; top: -20px; background: white; padding: 0 10px;">or</span>
+        </div>
+
+        <div class="d-flex flex-wrap justify-content-center gap-2">
+      <!-- Google -->
+      <a href="https://accounts.google.com/signin" class="btn btn-light border d-flex align-items-center gap-2">
+        <img src="https://img.icons8.com/color/24/google-logo.png" alt="Google" />
+        Sign Up with Google
+      </a>
+      <!-- Facebook -->
+      <a href="https://www.facebook.com/login/" class="btn btn-primary text-white d-flex align-items-center gap-2">
+        <img src="https://img.icons8.com/ios-filled/24/ffffff/facebook--v1.png" alt="Facebook" />
+        Sign Up with Facebook
+      </a>
+      <!-- WeChat -->
+      <a href="https://web.wechat.com/" class="btn btn-success text-white d-flex align-items-center gap-2">
+        <img src="https://img.icons8.com/color/24/weixing.png" alt="WeChat" />
+        Sign Up with WeChat
+      </a>
+      <!-- Telegram -->
+      <a href="https://web.telegram.org/" class="btn btn-info text-white d-flex align-items-center gap-2">
+        <img src="https://img.icons8.com/color/24/telegram-app.png" alt="Telegram" />
+        Sign Up with Telegram
+      </a>
+    </div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+        <script>
+
+          setTimeout(() => {
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(alert => {
+                alert.classList.remove('show');
+                alert.classList.add('fade');
+            });
+          }, 4000);
+
+            document.body.classList.add('fade-in');
+
+
+            document.querySelectorAll('a.transition-link').forEach(link => {
+                link.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const url = this.href;
+                    document.body.classList.add('fade-out');
+                    setTimeout(() => {
+                        window.location.href = url;
+                    }, 500);
+                });
+            });
+
+            function togglePassword(fieldId, iconSpan) {
+                const input = document.getElementById(fieldId);
+                const icon = iconSpan.querySelector('i');
+
+                if (input.type === 'password') {
+                    input.type = 'text';
+                    icon.classList.remove('fa-eye');
+                    icon.classList.add('fa-eye-slash');
+                } else {
+                    input.type = 'password';
+                    icon.classList.remove('fa-eye-slash');
+                    icon.classList.add('fa-eye');
+                }
+            }
+        </script>
+    </body>
+</html>

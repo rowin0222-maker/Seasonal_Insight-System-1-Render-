@@ -1,0 +1,291 @@
+<!-- app/templates/forecast_summary.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Sales Forecast</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='forecast.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<style>
+  body {
+    min.height: 100vh;
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', sans-serif;
+    background: linear-gradient(to right, #f5e7d0, #f1caa8, #e6a57e);
+    color: #333;
+  }
+
+.container {
+  padding: 2rem;
+  max-width: 900px;
+  margin: auto;
+  background-color: #ffffffd9;
+  border-radius: 20px;
+  box-shadow: 0 0 15px rgba(0,0,0,0.5);
+}
+
+.chart-container {
+  max-width: 700px;
+  height: 400px;
+  margin: 2rem auto;
+}
+
+#forecastChart {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+label, input, select, button {
+  display: block;
+  margin-top: 1rem;
+  font-size: 1rem;
+}
+
+input, select {
+  padding: 0.6rem;
+  border-radius: 10px;
+  border: 1px solid #ccc;
+  background: #fff8f3;
+  color: #333;
+}
+
+button {
+  margin-top: 1.5rem;
+  padding: 0.8rem 1.5rem;
+  background: #e59873;
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+button:hover {
+  background: #cc7852;
+}
+
+table {
+  width: 100%;
+  margin-top: 2rem;
+  border-collapse: collapse;
+  background-color: #fff5ee;
+  color: #000000;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+th, td {
+  border: 1px solid #e3a48b;
+  padding: 0.8rem;
+  text-align: center;
+  color: #000000;
+}
+
+th {
+  background-color: #f9c6a7;
+  color: #5a3e36;
+  font-weight: bold;
+}
+
+tr:nth-child(even) {
+  background-color: #ffe2d1;
+}
+
+tr:hover {
+  background-color: #fddcc4;
+}
+
+</style>
+<body>
+
+  <div style="display: flex; justify-content: space-between; align-items: center;">
+    <h1>📊 Sales Forecast</h1>
+    <a href="{{ url_for('main.transactions') }}" style="text-decoration: none;">
+      <button style="background-color: #e59873; color: white; border: none; padding: 0.6rem 1.2rem; border-radius: 10px; cursor: pointer;">
+        🔙 Back to Transaction History
+      </button>
+    </a>
+  </div>
+
+    {% include "messages.html" %}
+
+    <form method="POST" action="{{ url_for('main.forecast_summary') }}">
+    <div style="display: flex; flex-wrap: wrap; gap: 2rem; align-items: flex-start: justify-content: space-betweeen;">
+
+      <div style="flex: 1; min-width: 250px;">
+        <label>Choose Product:</label>
+        <input list="products" name="product" placeholder="Type or choose product" required>
+        <datalist id="products">
+          <option value="">-- Select Product --</option>
+          <option value="Water Bottle">Water Bottle</option>
+          <option value="Mountain Dew">Mountain Dew</option>
+          <option value="Pepsi">Pepsi</option>
+          <option value="Sprite">Sprite</option>
+          <option value="Zesto">Zesto</option>
+        </datalist>
+      </div>
+
+
+      <div style="flex: 1; min-width: 200px;">
+        <label>Forecast Type:</label>
+        <select name="forecast_unit" required>
+            <option value="week">Weekly</option>
+            <option value="month">Monthly</option>
+            <option value="year">Yearly</option>
+        </select></br>
+      </div>
+      <div style="flex: 1; min-width: 200px;">
+        <label>Quick Range</label>
+        <select name="quick_range" onchange="updateHowMany(this.value)">
+          <option value="">-- Choose Range</option>
+          <option value="3_week">3 Weeks</option>
+          <option value="5_week">5 Weeks</option>
+          <option value="7_week">7 Weeks</option>
+          <option value="10_week">10 Weeks</option>
+          <option value="3_month">3 Months</option>
+          <option value="5_month">5 Months</option>
+          <option value="7_month">7 Months</option>
+          <option value="10_month">10 Months</option>
+          <option value="3_year">3 Year</option>
+          <option value="5_year">5 Year</option>
+          <option value="7_year">7 Year</option>
+          <option value="10_year">10 Year</option>
+        </select>
+      </div>
+
+        
+      <div style="flex: 1; min-width: 200px;">
+        <label>How many: (Week, Month, Year)</label>
+        <input type="number" name="how_many" required><br><br>
+      </div>
+
+
+      <div style="flex: 1; min-width: 200px;">
+        <label>Current Stock Available:</label>
+        <input type="number" name="current_stock" required>
+      </div>
+    </div>
+
+        <button type="submit">Generate Forecast</button>
+    </form>
+
+    {% if chart_ready %}
+      <div class="chart-container">
+        <canvas id="forecastChart"></canvas>
+      </div>
+
+      <div class="display: flex; justify-content: space-between; align-items: center; margin-top: 2rem;">
+        <div>
+          <button onclick="exportToCSV()" class="btn btn-sm btn-outline-primary">⬇️ Export CSV</button>
+          <button onclick="window.print()" class="btn btn-sm btn-outline-secondary">🖨️ Print PDF</button>
+        </div>
+        <h2 style="margin: 0;">
+          Forecast Table for {{ product }}
+          ({{ how_many }} {{ forecast_unit ~ ('s' if how_many > 1 else '') | capitalize }})
+        </h2>
+      </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Forecast</th>
+              <th>Stock Left</th>
+              <th>Recommended Seasons</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in table_data %}
+              <tr>
+                <td>{{ row.date }}</td>
+                <td>{{ row.forecast }}</td>
+                <td>{{ row.stock_left if row.stock_left is not none else 'N/A' }}</td>
+                <td>{{ row.recommended_season or 'N/A' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        <table>
+          {% else %}
+             <p>No forecast generated yet. Please submit the form above to see results.</p>
+          {% endif %}
+
+          <script>
+            setTimeout(() => {
+              const alerts = document.querySelectorAll('.alert');
+              alert.forEach(alert => {
+                alert.classList.remove('show');
+                alert.classList.add('fade');
+              });
+            }, 4000);
+
+            {% if chart_ready %}
+              const labels = {{ table_data | map(attribute='date') | list | tojson }};
+              const forecastValues = {{ table_data | map(attribute='forecast') | list | tojson }};
+
+              const ctx = document.getElementById("forecastChart").getContext("2d");
+              new Chart(ctx, {
+                type: "line",
+                data: {
+                  labels: labels,
+                  datasets: [{
+                    label: '{{ product }}',
+                    data: forecastValues,
+                    borderColor: "#e59873",
+                    backgroundColor: "rgba(229, 152, 115, 0.2)",
+                    tension: 0.3,
+                    fill: true,
+                    pointRadius: 4,
+                    pointBackgroundColor: "#e59873"
+                  }]
+                },
+                options: {
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: {position: "top" },
+                    title: { display: true, text: "Forecast Chart" }
+                  },
+                  scales: {
+                    x: {
+                      ticks: { maxRotation: 60, minRotation: 45 }
+                    },
+                    y: {
+                      beginAtZero: true
+                    }
+                  }
+                }
+              });
+            {% endif %}
+
+            function exportToCSV() {
+              const table = document.querySelector("table");
+              const rows = Array.from(table.querySelectorAll("tr"));
+              const csv = rows.map(row => {
+                return Array.from(row.querySelectorAll("th, td"))
+                  .map(cell => `"{cell.innerText}"`)
+                  .join(",");
+              });.join("\n");
+
+              const blob = new Blob([csv], { type: "text/csv" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.setAttribute("hidden", "");
+              a.setAttribute("href", url);
+              a.setAttribute("download", "forecast.csv");
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+            }
+
+            function updateHowMany(value) {
+              if (!value) return;
+              const [num, unit] = value.split("_");
+              document.querySelector('input[name="how_many"]').value = num;
+              document.querySelector('select[name="forecast_unit"]').value = unit;
+            }
+          </script>        
+        </body>
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+      </html>
