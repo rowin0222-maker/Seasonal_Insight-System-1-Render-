@@ -1,12 +1,8 @@
 from app import create_app
+from flask import Flask
 
 app = create_app()
 
-if __name__ == "__main__":
-    with app.app_context():
-        from app.extensions import db
-        db.drop_all()
-        db.create_all()
-        print("✅ Database dropped and recreated successfully.")
-        
-    app.run(debug=True, port=5000)
+@app.route("/")
+def home():
+    return "Hello, Railway!"
