@@ -26,4 +26,4 @@ git add Procfile
 git commit -m "Fix Procfile format"
 web:: https://seasonal-insight-system.onrender.com
 gunicorn run:app
-web: gunicorn "run:create_app()"
+web: gunicorn run:app
