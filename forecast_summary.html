@@ -208,7 +208,13 @@ tr:hover {
           </tbody>
         <table>
           {% else %}
-             <p>No forecast generated yet. Please submit the form above to see results.</p>
+             <p style="color:#a33; font-weight:bold;">
+              No forecast generated yet. Please submit the form above to see results.
+             </p>
+             <p style="color:#555; font-size:0.9rem;">
+              📌 Tip: Forecasting requires at least <strong>2 past transactions</strong> for the selected product. 
+              If you haven't sold this product yet, try again after recording more sales in the Transaction History.
+             </p>
           {% endif %}
 
           <script>
@@ -264,9 +270,9 @@ tr:hover {
               const rows = Array.from(table.querySelectorAll("tr"));
               const csv = rows.map(row => {
                 return Array.from(row.querySelectorAll("th, td"))
-                  .map(cell => `"{cell.innerText}"`)
+                  .map(cell => `"${cell.innerText}"`)
                   .join(",");
-              });.join("\n");
+              }).join("\n");
 
               const blob = new Blob([csv], { type: "text/csv" });
               const url = URL.createObjectURL(blob);
