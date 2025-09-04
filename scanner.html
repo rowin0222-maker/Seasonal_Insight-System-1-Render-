@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         body {
             background-color: #ffe5b4;
@@ -165,6 +166,35 @@
             #interactive { width: 100%; height: 360px; }
             #message { width: calc(100% - 32px); }
         }
+        /* Stylized Download Button */
+        .styled-download {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #4facfe, #00f2fe); /* Blue gradient */
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Hover Effect */
+        .styled-download:hover {
+            transform: translateY(-2px) scale(1.05);
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
+            opacity: 0.95;
+        }
+
+        /* Active (Click) Effect */
+        .styled-download:active {
+            transform: scale(0.98);
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+        }
     </style>
 </head>
 <body class="d-flex flex-column align-items-center py-4">
@@ -193,9 +223,11 @@
     <div id="message" class="alert alert-info text-center" style="display:none; width: 640px;"></div>
 
     <div class="mt-4 text-center">
-        <button onclick="exportProductsToCSV()"
-                class="p-2 bg-blue-500 text-black rounded">
+        <button onclick="exportProductsToCSV()" class="styled-download">
             ⬇ Download Products (CSV)
+        </button>
+        <button onclick="exportProductsToExcel()" class="styled-download">
+            ⬇ Download Scanned Products (Excel)
         </button>
     </div>
 
@@ -268,6 +300,13 @@
             "0889021550158": { name: "Cupp Keyk Choco Mocha 5’s", price: "25", unit: "pack", stock: "50", category: "Snacks" },
             "7200282510058": { name: "Cupp Keyk Choco Mocha 5’s", price: "25", unit: "pack", stock: "50", category: "Snacks" },
             "6950015292201": { name: "Cupp Keyk Choco Mocha 5’s", price: "25", unit: "pack", stock: "50", category: "Snacks" },
+            "4800092550089": { name: "Cupp Keyk Cheezy Cheese 5’s", price: "25", unit: "pack", stock: "50", category: "Snacks" },
+            "4800092551048": { name: "Cupp Keyk Choco Fudge", price: "12", unit: "piece", stock: "60", category: "Snacks" },
+            "4800092551055": { name: "Cupp Keyk Choco Mocha", price: "12", unit: "piece", stock: "55", category: "Snacks" },
+            "4800092551062": { name: "Cupp Keyk Cookies & Cream", price: "12", unit: "piece", stock: "50", category: "Snacks" },
+            "4800092551079": { name: "Cupp Keyk Butter Caramel", price: "12", unit: "piece", stock: "45", category: "Snacks" },
+            "4800092551086": { name: "Cupp Keyk Vanilla Cream", price: "12", unit: "piece", stock: "40", category: "Snacks" },
+
 
             // =============================
             // Snacks - Chips & Others
@@ -474,17 +513,53 @@
             document.body.removeChild(link);
         }
 
+        function exportProductsToExcel() {
+            // Convert productsDB to an array for Excel
+            const productsArray = Object.entries(productsDB).map(([barcode, data]) => ({
+                Barcode: barcode,
+                Name: data.name,
+                Variant: data.variant || "",
+                Price: data.price,
+                Unit: data.unit,
+                Stock: data.stock,
+                Category: data.category
+            }));
+
+            // Create a new workbook and worksheet
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.json_to_sheet(productsArray);
+
+            // Append worksheet to workbook
+            XLSX.utils.book_append_sheet(wb, ws, "Products");
+
+            // Export as Excel file
+            XLSX.writeFile(wb, "products.xlsx");
+        }
+
         function verifyAndAdd() {
             if (tempFrontScan && tempBarcode) {
-                let product = productsDB[tempBarcode] || { name: "Unknown", price: "0", unit: "N/A", stock: "0", category: "Uncategorized" };
+                let product = productsDB[tempBarcode] || { 
+                    name: "Unknown", 
+                    price: "0", 
+                    unit: "N/A", 
+                    stock: "0", 
+                    category: "Uncategorized" 
+                };
+
+                // add row
                 addProductRow(tempFrontScan, product, tempBarcode);
                 showMessage("✅ Product added to table", "success");
 
+                // flash green to indicate success
+                scanFrameEl.classList.add("flash");
+                setTimeout(() => scanFrameEl.classList.remove("flash"), 500);
+
                 // Reset for next scan
+                step = 1;
                 tempFrontScan = null;
                 tempBarcode = null;
-                step = 1;
                 frameCaptionEl.textContent = "Step 1: Scan product FRONT";
+                showMessage("✅ Product added successfully!", "success");
             }
         }
 
@@ -496,6 +571,7 @@
         document.getElementById("startBtn").addEventListener("click", () => {
             if (scanning) return;
             scanning = true;
+            interactiveEl.classList.add("scanning");
 
             Quagga.init({
                 inputStream: {
@@ -520,9 +596,7 @@
                     return;
                 }
                 Quagga.start();
-                interactiveEl.classList.add("scanning");
                 showMessage("Scanner started... Step 1: Scan product FRONT", "primary");
-                frameCaptionEl.textContent = "Step 1: Scan product FRONT";
             });
         });
 
@@ -575,6 +649,101 @@
                 showMessage("Scanner stopped manually", "warning");
             }
         });
+
+        function startScanner() {
+            if (scanning) return;
+            scanning = true;
+            interactiveEl.classList.add("scanning");
+            frameCaptionEl.textContent = "Align product FRONT inside the frame";
+
+            Quagga.init({
+                inputStream: {
+                    name: "Live",
+                    type: "LiveStream",
+                    target: interactiveEl,
+                    constraints: { facingMode: "environment" }
+                },
+                decoder: {
+                    readers: ["ean_reader", "ean_8_reader", "upc_reader", "upc_e_reader", "code128_reader"]
+                }
+            }, function (err) {
+                if (err) {
+                    console.error(err);
+                    showMessage("Camera error: " + err, "danger");
+                    return;
+                }
+                Quagga.start();
+                showMessage("Scanner started. Step 1: Scan FRONT side.", "info");
+            });
+
+            Quagga.onDetected(handleDetectedCode);
+        }
+
+        function stopScanner() {
+            if (!scanning) return;
+            scanning = false;
+            interactiveEl.classList.remove("scanning");
+            Quagga.stop();
+            showMessage("Scanner stopped.", "warning");
+        }
+
+        function handleDetectedCode(result) {
+            const code = result.codeResult.code;
+            const now = Date.now();
+
+            // prevent duplicates within 1.5 seconds
+            if (code === lastCode && now - lastTime < 1500) return;
+            lastCode = code;
+            lastTime = now;
+
+            // flash border on detection
+            scanFrameEl.classList.add("flash");
+            setTimeout(() => scanFrameEl.classList.remove("flash"), 200);
+
+            if (step === 1) {
+                // Step 1: front scan
+                tempFrontScan = code;
+                step = 2;
+                frameCaptionEl.textContent = "Now scan the BARCODE side";
+                showMessage("Front side scanned. Proceed to barcode.", "info");
+            }
+            else if (step === 2) {
+                // Step 2: barcode scan
+                tempBarcode = code;
+                step = 1;
+                frameCaptionEl.textContent = "Align product FRONT inside the frame";
+
+                // look up product
+                if (productsDB[tempBarcode]) {
+                    const product = productsDB[tempBarcode];
+                    addProductRow(tempFrontScan, product, tempBarcode);
+                    showMessage("Product added: " + product.name, "success");
+                } else {
+                    showMessage("Product not found in database.", "danger");
+                }
+
+                // reset for next product
+                tempFrontScan = null;
+            }
+        }
+
+        function exportProductsToCSV() {
+            let rows = [["Barcode", "Name", "Price", "Unit", "Stock", "Category"]];
+            tableBody.querySelectorAll("tr").forEach(tr => {
+                const cells = tr.querySelectorAll("td");
+                rows.push(Array.from(cells).map(td => td.innerText));
+            });
+
+            let csvContent = rows.map(e => e.join(",")).join("\n");
+            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = "products.csv";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
     </script>
 </body>
 </html>
