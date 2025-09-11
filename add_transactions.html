@@ -157,6 +157,14 @@
 
                         <button type="submit" class="btn btn-primary">💾 Save Transaction</button>
                         <a href="{{ url_for('main.transactions') }}" class="btn btn-secondary ms-2">← Back to Transactions</a>
+
+                        <!-- Checkbox for duplication -->
+                         <div class="form-check mt-3">
+                            <input class="form-check-input" type="checkbox" value="yes" id="duplicate" name="duplicate">
+                            <label class="form-check-label" for="duplicate">
+                                📑 Also add this transaction to Transaction History
+                            </label>
+                        </div>
                     </form>
                 </div>
             </body>
