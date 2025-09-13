@@ -565,20 +565,35 @@ def add_transactions():
 
         forecast_data['ds'] = pd.to_datetime(forecast_data['ds'], errors='coerce')
         forecast_data['y'] = pd.to_numeric(forecast_data['y'], errors='coerce')
-
-
         forecast_data = forecast_data.dropna(subset=['ds', 'y'])
         forecast_data = forecast_data[forecast_data['y'] >= 0]
+
+        # 🔹 Outlier removal: remove values > mean + 3*std
+        if len(forecast_data) > 2:  # only if enough data
+            threshold = forecast_data['y'].mean() + 3 * forecast_data['y'].std()
+            forecast_data = forecast_data[forecast_data['y'] <= threshold]
+
+        # 🔹 Scale down to prevent Prophet instability
+        scale_factor = 100.0
+        forecast_data['y'] = forecast_data['y'] / scale_factor
+
 
         if len(forecast_data) < 2:
             flash("Not enough clean data to generate forecast.", "warning")
         else:
-            model = Prophet()
-            model.fit(forecast_data)
-            future = model.make_future_dataframe(periods=30)
-            forecast = model.predict(future)
-            forecast_output = forecast[['ds', 'yhat']].tail(10).to_dict(orient='records')
-            flash('Forecast updated!', "success")
+            try:
+                model = Prophet()
+                model.fit(forecast_data)
+                future = model.make_future_dataframe(periods=30)
+                forecast = model.predict(future)
+
+                # Scale back forecast values
+                forecast['yhat'] = forecast['yhat'] * scale_factor
+
+                forecast_output = forecast[['ds', 'yhat']].tail(10).to_dict(orient='records')
+                flash('Forecast updated!', "success")
+            except Exception as e:
+                flash(f"Forecasting failed: {str(e)}", "danger")
 
         return redirect(url_for('main.transactions'))
 
